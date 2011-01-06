@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}
+Login Form | {{ block.super }}
+{% endblock %}
+
+{% block header %}
+<h1>Login Form</h1>
+{% endblock %}
+
+{% block content %}
+<form action="{% url auth_login %}" method="POST">
+<table>
+{{ form }}
+<tr>
+    <td><input type="submit" value="Login" /></td>
+</tr>
+</table>
+</form>
+{% endblock %}

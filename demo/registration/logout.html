@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}
+Login Form | {{ block.super }}
+{% endblock %}
+
+{% block header %}
+<h1>Logged Out</h1>
+{% endblock %}
+
+{% block content %}
+<p>You've successfully logged out.<p>
+
+<a href="{% url login %}">Login Again</a>
+{% endblock %}

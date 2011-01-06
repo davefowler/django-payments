@@ -1,0 +1,165 @@
+
+####  CONFIGURATION FIELDS #########
+
+STRIPE_API_KEY = "YOURKEYHERE"
+SUCCESS_REDIRECT_URL = '/project/add/'
+CURRENCY = 'usd'
+
+####################################
+
+
+class QuotaException(Exception):
+    """ 
+    A nice exception to raise if something has overeached a quota
+    """
+    def __init__(self, msg):
+        self.message = msg
+        super(QuotaException, self).__init__(msg)
+        
+    def message(self):
+        self.message
+
+
+
+from django.db import models
+
+PER_CHOICES = (
+    ('once', 'Once'),
+    ('week', 'Weekly'),
+    ('month', 'Monthly'),
+    ('year', 'Yearly'),
+               )
+
+from payments.fields import PickledObjectField
+
+
+class Plan(models.Model):
+    
+    name = models.CharField(max_length = 50)
+    slug = models.SlugField(max_length = 50)
+    
+    # NOTE THAT THIS IS IN CENTS!
+    price = models.IntegerField(default = 0, help_text="in cents")
+    
+    is_active = models.BooleanField(default = True)
+    free_trial_days = models.IntegerField(default = 0)
+    per = models.CharField(max_length = 10, choices = PER_CHOICES)
+    
+
+    # Stores a dictionary of the limits for this plan
+    limits = PickledObjectField(default = {})
+    
+    created = models.DateTimeField(auto_now_add = True)
+    
+
+    def price_in_dollars(self):
+        if self.per == "once":
+            return "$%.2f" % self.price/100.0
+
+        return "$%.2f/%s" % (self.price/100.0, self.per)
+
+    def number_of_subscriptions(self):
+        """ Returns the # of active subscriptions that are using this plan """
+        return self.subscriptions.filter(active_card = True, stopped__isnull=True).count()
+
+    def _revenue(self):
+        return int(self.number_of_subscriptions()) * self.price/100.00
+        
+    def revenue(self):
+        return "$%.2f per %s" % (self._revenue(), self.per)
+
+
+    def __str__(self):
+        return self.name
+
+
+from django.contrib.auth.models import User
+from datetime import datetime, timedelta
+
+class SubscriptionManager(models.Manager):
+    
+    def new(self, plan, user, card_number, exp_month, exp_year):
+        
+        subscription = Subscription(user = user, 
+                                    plan = plan, 
+                                    free_until = datetime.now() + timedelta(days = plan.free_trial_days),
+                                    )
+        if not subscription.pay(card_number, exp_month, exp_year):
+            return False
+        
+        subscription.save()
+        return subscription
+
+
+
+
+class Subscription(models.Model):
+    """
+    Create a new Subscription for every plan a user is paying for.
+
+    """
+    user = models.ForeignKey(User)
+    plan = models.ForeignKey(Plan, related_name='subscriptions', blank=False, null=False)
+    
+    free_until = models.DateTimeField()
+    active_card = models.BooleanField(default = False)
+    
+    stripe_id = models.CharField(max_length = 20)
+
+    started = models.DateTimeField(auto_now_add = True)
+    stopped = models.DateTimeField(null=True, blank=True)
+
+    objects = SubscriptionManager()
+    
+
+    def projects(self):
+        """ A list of projects used for admin display purposes """
+        return ','.join([p.name for p in self.user.projects.filter(is_private = True)])
+    
+    def revenue(self):
+        """ Amount of money earned from this user... (its not exact estimete) """
+
+        if self.per == "once":
+            return "$%.2f" % self.plan.price/100.00
+        
+        conv = {"month": 30, "week": 7, "year": 365}
+
+        time = (self.stopped or datetime.now()) - self.started
+        days = time.days
+        
+        return "$%.2f" % (self.plan.price/100.0*days/(floatconv[self.per]))
+        
+                
+    
+    def __str__(self):
+        return self.plan.name + " for " + self.user.email
+
+    def pay(self, number, exp_month, exp_year):
+        """ Register the Subscription with Stripe """
+        import devpayments
+        
+        devpay = devpayments.Client(STRIPE_API_KEY)
+        card = {
+            'number': number,
+            'exp_month': exp_month,
+            'exp_year': exp_year,
+            }
+
+        parms = {"amount": self.plan.price, "currency": CURRENCY, 'card': card, "mnemonic": self.user.email}
+        
+        self.free_until = datetime.now() + timedelta(days = self.plan.free_trial_days)
+        if self.free_until > datetime.now():
+            parms["start"] = self.free_until
+
+        self.active_card = False
+            
+        try:
+            charge = devpay.execute(**parms)
+            self.active_card = charge.paid
+        except devpayments.DevPayException, e:
+            raise e
+            
+        self.stripe_id = charge.id
+        
+        return self.active_card
+
