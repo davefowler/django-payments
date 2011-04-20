@@ -46,6 +46,7 @@ class Plan(models.Model):
     is_active = models.BooleanField(default = True)
     free_trial_days = models.IntegerField(default = 0)
     per = models.CharField(max_length = 10, choices = PER_CHOICES)
+    
 
     # Stores a dictionary of the limits for this plan
     limits = PickledObjectField(default = {})

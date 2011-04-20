@@ -21,6 +21,7 @@ def form_view(request, plan_slug = "", subscription_id = ""):
     if request.method=="POST":
         form = SubscriptionForm(request.POST, instance = subscription or Subscription(plan = plan))
         form.request = request
+        
         if form.is_valid():
             form.save()
             return HttpResponseRedirect(SUCCESS_REDIRECT_URL)

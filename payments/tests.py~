@@ -12,7 +12,7 @@ __test__ = {
 >>> c = Client()
 
 >>> from django.conf import settings
->>> r = c.post(settings.LOGIN_URL, {'email': user.username, "password": "pass"})
+>>> r = c.post(reverse(settings.LOGIN_URL), {'email': user.username, "password": "pass"})
 >>> r.status_code # should redirect if login worked
 302
 
@@ -25,25 +25,25 @@ __test__ = {
 >>> advanced.save()
 
 # Bad Year
->>> r = c.post(reverse('payments_form', args=['basic']), {'exp_month': '10', 'exp_year': '2009', 'number': '4242424242424242', 'plan': basic.id })
+>>> r = c.post(reverse('payments_form', args=['basic']), {'exp_month': '10', 'exp_year': '2009', 'number': 4242424242424242, 'plan': basic.id })
 >>> r.status_code
 200
->>> r.context['form'].errors # Invalid Expiration Year
+>>> r.context['form'].errors 
 {'__all__': [u"Your card's expiration year is invalid"]}
 
 # Bad Month
 >>> r = c.post(reverse('payments_form', args=['basic']), {'exp_month': 'a9', 'exp_year': '2011', 'number': 4242424242424242, 'plan': basic.id })
 >>> r.status_code
 200
->>> r.context['form'].errors # Invalid expiration month
+>>> r.context['form'].errors
 {'__all__': [u'exp_month should be an int (is None)']}
 
 # Bad Number
 >>> r = c.post(reverse('payments_form', args=['basic']), {'exp_month': 'a9', 'exp_year': '2011', 'number': "asdf", 'plan': basic.id })
 >>> r.status_code
 200
->>> r.context['form'].errors # Invalid number
-{'number': [u'Enter a whole number.'], '__all__': [u'Your card number is invalid']}
+>>> r.context['form'].errors
+{'number': [u'Enter a whole number.'], '__all__': [u'exp_month should be an int (is None)']}
 
 >>> r = c.post(reverse('payments_form', args=['basic']), {'exp_month': 10, 'exp_year': 2011, 'number': 4242424242424242, 'plan': basic.id })
 >>> r.status_code
@@ -75,7 +75,7 @@ True
 "Payment": """
 
 # NOTE!  Make sure your API key is not in livemode when you do these tests!
-Documentation on that is here http://eta.stripe.com/api
+Documentation on that is here http://eta.devpayments.com/api
 
 >>> from payments.models import Plan, Subscription, User
 
@@ -84,7 +84,7 @@ Documentation on that is here http://eta.stripe.com/api
 >>> plan.save()
 
 # Make an example user and an Subscription for them with this plan
->>> user = User.objects.create_user("stripetest", "dev@payments.com", "pass")
+>>> user = User.objects.create_user("devpaymentstest", "dev@payments.com", "pass")
 
 # Sample card credentials
 >>> number = 4242424242424242; exp_month = 10; exp_year = 2011
@@ -97,7 +97,7 @@ True
 # Ensure that a subscription was saved.
 >>> Subscription.objects.all().count() - nsubs 
 1
->>> len(subscription.stripe_id) > 2
+>>> len(subscription.devpayments_id) > 2
 True
 
 
@@ -106,7 +106,7 @@ True
 
 
 # Expiration date is already passed...
->>> from stripe import *
+>>> from devpayments import *
 >>> try:
 ...   badsub = Subscription.objects.new(plan, user, number, exp_month, 2008)
 ... except CardException, e:
